@@ -8,13 +8,13 @@
 #include <LiquidCrystal_I2C.h>
 #include "time.h"
 
-#define WIFI_SSID   "XINH coffee&tea"
-#define WIFI_PASSWORD "Camonquykhach"
+#define WIFI_SSID   "SSID_Name"
+#define WIFI_PASSWORD "Password"
 
 #define API_KEY "AIzaSyCxiCUZFwtgBr56HlOx3XtT9Y0Q12uVABQ"
 
-#define USER_EMAIL "esp32firebase2111@gmail.com"
-#define USER_PASSWORD "tenkhonghople"
+#define USER_EMAIL "you@gmail.com"
+#define USER_PASSWORD "password"
 
 #define DATABASE_URL "https://dht11-ea471-default-rtdb.asia-southeast1.firebasedatabase.app/"
 
@@ -26,28 +26,36 @@ FirebaseAuth auth;
 FirebaseConfig config;
 
 String uid;
- 
+
+//Data transfered to cloud
 String databasePath;
 String tempPath;
 String humPath;
 String soilPath;
 String highPath;
 String HighPath;
+
+// Setup for DHT11 sensor
 #define DHTPIN 4
 #define DHTTYPE DHT11
-DHT dht(DHTPIN, DHTTYPE);
+DHT dht(DHTPIN, DHTTYPE);     
 int x;
+// Sensor value
 float temperature;
 float humidity;
 int soilmoisture;
 float High;
+
+// Time value
 unsigned long sendDataPrevMillis = 0;
 unsigned long timerDelay = 3000;
 
+//Setup for time
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 3600;
 
+// Init Time
 void InitTime(int &c, int &d, int &e){
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)){
@@ -64,9 +72,9 @@ void InitTime(int &c, int &d, int &e){
   char timeSecond[3];
   strftime(timeSecond,3, "%S", &timeinfo);
   e = atoi(timeSecond);
-
 }
 
+// Setup wifi
 void initWiFi()
 {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -80,6 +88,7 @@ void initWiFi()
   Serial.println();
 }
 
+// Sending sensor value to cloud function
 void sendFloat(String path, float value)
 {
   if (Firebase.RTDB.setFloat(&fbdo, path.c_str(), value))
@@ -99,6 +108,7 @@ void sendFloat(String path, float value)
   }
 }
 
+// Setup for system
 void setup()
 {
   Serial.begin(9600);
@@ -108,6 +118,8 @@ void setup()
   lcd.backlight();
   dht.begin();
   initWiFi();
+
+  // Setup to connect to Firebase cloud
   config.api_key = API_KEY;
 
   auth.user.email = USER_EMAIL;
@@ -123,6 +135,7 @@ void setup()
 
   Firebase.begin(&config, &auth);
 
+  // Connecting to Firebase
   Serial.println("Getting User UID");
   while ((auth.token.uid) == "")
   {
@@ -134,18 +147,22 @@ void setup()
   Serial.println(uid);
   databasePath = "/UsersData/" + uid;
 
+  // Create path on cloud to save sensor value
   tempPath = databasePath + "/temperature";
   humPath = databasePath + "/humidity";
   soilPath = databasePath + "/soilmoisture";
   highPath = databasePath + "/high";
   HighPath = databasePath + "/High";
 
+  // Get time in real-time
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   pinMode(12,OUTPUT); // test tưới nước đúng giờ
 }
 
+// loop
 void loop()
 { 
+  // Get sensor value
   if (Firebase.ready() && (millis() - sendDataPrevMillis > timerDelay || sendDataPrevMillis == 0))
   {
     sendDataPrevMillis = millis();
@@ -153,10 +170,13 @@ void loop()
     humidity = dht.readHumidity();
     soilmoisture=analogRead(33)/4;
     soilmoisture =100 - map(soilmoisture,0,1023,0,100);
+
+    // Receive high of tree data from Firebase cloud to ESP32
     if(Firebase.RTDB.getFloat(&fbdo,highPath.c_str())){
       High = fbdo.floatData();
     }
 
+    // Display value on LCD monitor
     lcd.setCursor(1,0);
     lcd.print("Temp: " + String(temperature) + (char)223 + "C");
     lcd.setCursor(1,1);
@@ -171,16 +191,19 @@ void loop()
     // sendFloat(tempPath, temperature);
     // sendFloat(humPath, humidity);
     // sendFloat(soilPath,soilmoisture);
+    //Send sensor data to Firebase cloud
     sendFloat(HighPath,15);
     sendFloat(tempPath, temperature);
     sendFloat(humPath, humidity);
     sendFloat(soilPath,soilmoisture);
   }
+  // Get time in real-time
   int hour=0;
   int minute=0;
   int second = 0;
   InitTime(hour,minute, second);
-  if (hour == 4 && minute == 35 && second >0 && second < 4)
+  // Auto water in scheduled time
+  if (hour == 4 && minute == 35 && second >0 && second < 4) //4h35
   {
     if(soilmoisture < 40){
       digitalWrite(12,HIGH);
@@ -208,7 +231,7 @@ void loop()
       digitalWrite(12,LOW);
     }
   }
-    if (hour == 7 && minute == 0 && second >0 && second < 4)
+    if (hour == 7 && minute == 0 && second >0 && second < 4)  //7h
   {
     if(soilmoisture < 40){
       digitalWrite(12,HIGH);
@@ -236,7 +259,7 @@ void loop()
       digitalWrite(12,LOW);
     }
   }
-    if (hour == 10 && minute == 0 && second >0 && second < 4)
+    if (hour == 10 && minute == 0 && second >0 && second < 4) //10h
   {
     if(soilmoisture < 40){
       digitalWrite(12,HIGH);
